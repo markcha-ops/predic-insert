@@ -11,20 +11,22 @@ import numpy as np
 import warnings
 import itertools
 import pandas as pd
+import statsmodels.api as sm
 warnings.filterwarnings("ignore")
 
 with TagClient() as client:
     data = client.get_data()
 # 필요한 파라미터 정의
-
+for tag in data:
+    print(tag['tagname'])
 # 데이터 가져오기
 start_time = time.time()  # 루프 시작 시간 기록
 processed_items = 0      # 처리된 항목 수
-data = data[::-1]
+c = True
 for index, item in enumerate(data):
 
     processed_items += 1
-    print(item['tagname'])
+
     # 현재까지 소요된 시간 계산
     current_time = time.time()
 
@@ -34,8 +36,16 @@ for index, item in enumerate(data):
     print(f"진척도: {progress:.2%}")
     tagname = item['tagname']
     if (tagname[0] == 'V'):
+        print('wejfoiwefj' + tagname)
         continue
-    client = Client(start="2024-01-14T23:51:00Z", end="2024-01-16T18:39:00Z", tagname=tagname, calcType="TREND")
+    # if c:
+    #     if "U008_PWR_kWh" != tagname:
+    #         continue
+    #     else:
+    #         c = False
+    print(tagname)
+
+    client = Client(start="2024-01-14T23:51:00Z", end="2024-01-17T00:30:00Z", tagname=tagname, calcType="TREND")
     find_data = client.requset()
     find_zero = False
     start_record_time = ""
@@ -43,6 +53,10 @@ for index, item in enumerate(data):
     stop_record_time = ""
     stop_before_value = 0
     before_value = 0
+    after_data = []
+    print(find_data)
+    if find_data == None:
+        continue
     for row in find_data:
         value = row['value']
         if (value <= 0):
@@ -54,6 +68,7 @@ for index, item in enumerate(data):
             if (value > 0):
                 stop_record_time = row['time']
                 stop_before_value = value
+                after_data.append(row)
                 break
         before_value = value
     if stop_before_value == 0:
@@ -81,20 +96,38 @@ for index, item in enumerate(data):
 
     print(df)
     # 하이퍼파라미터 조합 생성
+# 예시 하이퍼파라미터 범위
     p = d = q = range(0, 3)
-    pdq = list(itertools.product(p, d, q))
+    pdq = [(x[0], x[1], x[2], 12) for x in list(itertools.product(p, d, q))]
+
 
     best_aic = np.inf
     best_pdq = None
     best_model = None
-    from statsmodels.tsa.arima.model import ARIMA
 
+    best_score, best_cfg = float("inf"), None
+    for param in pdq:
+        try:
+            model = sm.tsa.statespace.SARIMAX(df, order=(param[0], param[1], param[2]), seasonal_order=(param[0], param[1], param[2], 12))
+            results = model.fit()
+            
+            # 성능 평가
+            y_forecasted = results.predict(start=pd.to_datetime('start_date'), end=pd.to_datetime('end_date'))
+            y_truth = df['start_date':'end_date']
+            mse = mean_squared_error(y_truth, y_forecasted)
+            rmse = sqrt(mse)
+
+            if rmse < best_score:
+                best_score, best_cfg = rmse, param
+            print('SARIMA{} RMSE={}'.format(param, rmse))
+        except:
+            continue
     p = 2  # 자기회귀 항의 차수
     d = 1  # 차분의 차수
     q = 2  # 이동 평균 항의 차수
 
     # 모델 훈련
-    model = SARIMAX(df['value'], order=(1, 1, 1), seasonal_order=(0,0,0,0))
+    model = SARIMAX(df['value'], order=(1, 1, 1), seasonal_order=(1,1,1,12))
     model_fit = model.fit()
 
     # print(f"Best ARIMA{best_pdq} model - AIC:{best_aic}")
