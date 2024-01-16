@@ -26,7 +26,7 @@ class Client:
     };
 
     def requset(self):
-
+        print(self.data)
         # 함수 호출하여 데이터 가져오기
         try:
             response = requests.post(self.url, headers=self.headers, data=json.dumps(self.data))
